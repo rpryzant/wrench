@@ -7,7 +7,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm.auto import trange
 from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer
-
+from transformers import Trainer, DataCollatorForLanguageModeling, TrainingArguments
+from transformers import BertForMaskedLM
 from ..backbone import BackBone
 from ..basemodel import BaseTorchClassModel
 from ..dataset import BaseDataset
@@ -17,6 +18,35 @@ logger = logging.getLogger(__name__)
 
 collate_fn = construct_collate_fn_trunc_pad('mask')
 
+
+class MyDataset(torch.utils.data.Dataset):
+  def __init__(self, input_ids, attn_mask, labels=None):
+    self.input_ids = input_ids
+    self.attn_mask = attn_mask
+    if labels is not None:
+        self.labels = labels
+
+  def __len__(self):
+    return len(self.input_ids)
+
+  def __getitem__(self, index):
+    item = {
+        'input_ids': self.input_ids[index],
+        'attention_mask': self.attn_mask[index]
+    }   
+    if hasattr(self, 'labels'):
+        item['labels'] = self.labels[index]
+
+    return item
+
+
+def transfer_parameters(from_model, to_model):
+    to_dict = to_model.state_dict()
+    from_dict = {k: v for k, v in from_model.state_dict().items() if k in to_dict}
+    to_dict.update(from_dict)
+    to_model.load_state_dict(to_dict)
+
+    return to_model
 
 class BertClassifierModel(BaseTorchClassModel):
     def __init__(self,
@@ -46,6 +76,44 @@ class BertClassifierModel(BaseTorchClassModel):
         }
         self.model: Optional[BackBone] = None
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    def pretrain(self, dataset, epochs, output_dir, max_seq_len=150, device=None):
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=self.tokenizer, 
+            mlm_probability=0.15)
+
+        training_args = TrainingArguments(
+            num_train_epochs=epochs,
+            per_device_train_batch_size=16,
+            output_dir=output_dir)
+
+        self.model = BertForMaskedLM.from_pretrained(self.hyperparas['model_name'])
+        if device is not None:
+            self.model = self.model.to(device)
+
+        texts = [x['text'] for x in dataset.examples]
+
+        tokenized_data = self.tokenizer(
+            texts,
+            padding='max_length',
+            truncation=True,
+            add_special_tokens=True,
+            max_length=max_seq_len,
+            return_attention_mask=True)        
+
+        dataset = MyDataset(
+            tokenized_data['input_ids'], 
+            tokenized_data['attention_mask'],
+            None)    
+
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=dataset,
+            tokenizer=self.tokenizer,
+            data_collator=data_collator)
+
+        train_result = trainer.train()
 
     def fit(self,
             dataset_train: BaseDataset,
@@ -85,11 +153,21 @@ class BertClassifierModel(BaseTorchClassModel):
         sample_weight = torch.FloatTensor(sample_weight).to(device)
 
         n_class = dataset_train.n_class
-        model = get_bert_model_class(dataset_train)(
-            n_class=n_class,
-            **hyperparas
-        ).to(device)
-        self.model = model
+        if self.model == None:
+            model = get_bert_model_class(dataset_train)(
+                n_class=n_class,
+                **hyperparas
+            ).to(device)
+            self.model = model
+        else:
+            new_model = get_bert_model_class(dataset_train)(
+                n_class=n_class,
+                **hyperparas
+            ).to(device)
+            transfer_parameters(self.model, new_model)
+            self.model = self.model.cpu() # take off of gpu
+            self.model = new_model
+            model = new_model
 
         optimizer = AdamW(model.parameters(), lr=hyperparas['lr'], weight_decay=hyperparas['l2'])
 

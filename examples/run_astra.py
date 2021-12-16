@@ -1,6 +1,6 @@
 import logging
 import torch
-
+import sys; sys.path.append('..')
 from wrench.dataset import load_dataset
 from wrench.logging import LoggingHandler
 from wrench.classification import Astra
@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 device = torch.device('cuda')
 
 #### Load dataset
-dataset_path = f'../datasets/'
-data = 'census'
-train_data, valid_data, test_data = load_dataset(dataset_path, data, extract_feature=True)
+dataset_path = f'../datasets/datasets/'
+data = 'sms'
+train_data, valid_data, test_data = load_dataset(dataset_path, data, extract_feature=True, extract_fn='bert')
+
 
 #### Load given labeled data ids
-idx, _ = train_data.load_labeled_ids_and_lf_exemplars(f'{dataset_path}/{data}/labeled_ids.json')
+idx, _ = train_data.load_labeled_ids_and_lf_exemplars(f'{dataset_path}/{data}/label.json')
 
 #### Run end model: Astra
 model = Astra(
@@ -40,6 +41,7 @@ model = Astra(
     use_lr_scheduler=True,
     lr_scheduler='default'
 )
+
 model.fit(
     dataset_train=train_data,
     labeled_data_idx=idx,

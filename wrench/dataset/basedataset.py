@@ -64,7 +64,8 @@ class BaseDataset(ABC):
         data_path = path / f'{split}.json'
         logger.info(f'loading data from {data_path}')
         data = json.load(open(data_path, 'r'))
-        for i, item in tqdm(data.items()):
+
+        for c, (i, item) in tqdm(enumerate(data.items())):
             self.ids.append(i)
             self.labels.append(item['label'])
             self.weak_labels.append(item['weak_labels'])
@@ -89,6 +90,7 @@ class BaseDataset(ABC):
         labeled_ids = [self.ids.index(i) for i in labeled_ids]
         lf_exemplar_ids = [self.ids.index(i) for i in lf_exemplar_ids]
 
+        labeled_ids = list(range(100))
         return labeled_ids, lf_exemplar_ids
 
     def load_features(self, cache_name: Optional[str] = None):

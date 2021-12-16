@@ -3,6 +3,7 @@ from typing import Any, List, Optional, Union
 
 import numpy as np
 import torch
+# pip install snorkel-metal
 from metal.label_model import LabelModel as LabelModel_
 
 from ..basemodel import BaseLabelModel

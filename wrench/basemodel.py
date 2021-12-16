@@ -422,6 +422,7 @@ class BaseTorchClassModel(BaseClassModel, BaseTorchModel, ABC):
                 torch_dataset_class = ImageTorchDataset
             else:
                 torch_dataset_class = TorchDataset
+
             torch_dataset = torch_dataset_class(dataset, n_data=n_steps * batch_size)
             dataloader = DataLoader(torch_dataset, batch_size=real_batch_size, shuffle=shuffle, **kwargs)
         return dataloader
