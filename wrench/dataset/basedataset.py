@@ -182,6 +182,19 @@ class BaseDataset(ABC):
 
         return dataset
 
+    def concat(self, dataset_b):
+        assert self.id2label == dataset_b.id2label
+        assert self.n_class == dataset_b.n_class
+        assert self.n_lf == dataset_b.n_lf
+
+        for i in range(len(dataset_b)):
+            self.ids.append(dataset_b.ids[i])
+            self.labels.append(dataset_b.labels[i])
+            self.examples.append(dataset_b.examples[i])
+            self.weak_labels.append(dataset_b.weak_labels[i])
+
+        return self
+
     def create_split(self, idx: List[int]):
         chosen = self.create_subset(idx)
         remain = self.create_subset([i for i in range(len(self)) if i not in idx])
@@ -196,9 +209,13 @@ class BaseDataset(ABC):
         else:
             return list(idx)
 
-    def get_covered_subset(self):
+    def get_covered_subset(self, uncovered=True):
         idx = [i for i in range(len(self)) if np.any(np.array(self.weak_labels[i]) != -1)]
-        return self.create_subset(idx)
+        if uncovered:
+            uncovered_idx = [i for i in range(len(self))if i not in idx]
+            return self.create_subset(idx), self.create_subset(uncovered_idx)
+        else:
+            return self.create_subset(idx)
 
     def get_conflict_labeled_subset(self):
         idx = [i for i in range(len(self)) if len({l for l in set(self.weak_labels[i]) if l != -1}) > 1]

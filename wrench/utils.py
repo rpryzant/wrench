@@ -100,6 +100,7 @@ def cross_entropy_with_probs(
         target: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
         reduction: str = "mean",
+        tok_weight: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Calculate cross-entropy loss when targets are probabilities (floats), not ints.
 
@@ -139,21 +140,25 @@ def cross_entropy_with_probs(
         input = input.squeeze()
         if target.ndim == 2:
             target = target[:, 1]
-        return F.binary_cross_entropy_with_logits(input, target, weight=weight, reduction=reduction)
+        cum_losses = F.binary_cross_entropy_with_logits(input, target, weight=weight, reduction='none')
     else:
 
         if target.ndim == 1:
-            return F.cross_entropy(input, target.long(), weight=weight, reduction=reduction)
+            cum_losses = F.cross_entropy(input, target.long(), weight=weight, reduction='none')
+        else:
+            num_points, num_classes = input.shape
+            # Note that t.new_zeros, t.new_full put tensor on same device as t
+            cum_losses = input.new_zeros(num_points)
+            for y in range(num_classes):
+                target_temp = input.new_full((num_points,), y, dtype=torch.long)
+                y_loss = F.cross_entropy(input, target_temp, reduction="none")
+                if weight is not None:
+                    y_loss = y_loss * weight[y]
 
-        num_points, num_classes = input.shape
-        # Note that t.new_zeros, t.new_full put tensor on same device as t
-        cum_losses = input.new_zeros(num_points)
-        for y in range(num_classes):
-            target_temp = input.new_full((num_points,), y, dtype=torch.long)
-            y_loss = F.cross_entropy(input, target_temp, reduction="none")
-            if weight is not None:
-                y_loss = y_loss * weight[y]
-            cum_losses += target[:, y].float() * y_loss
+                cum_losses += target[:, y].float() * y_loss
+
+    if tok_weight is not None:
+        cum_losses *= tok_weight
 
     if reduction == "none":
         return cum_losses

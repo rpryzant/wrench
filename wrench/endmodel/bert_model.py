@@ -77,13 +77,13 @@ class BertClassifierModel(BaseTorchClassModel):
         self.model: Optional[BackBone] = None
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    def pretrain(self, dataset, epochs, output_dir, max_seq_len=150, device=None):
+    def pretrain(self, dataset, steps, output_dir, max_seq_len=150, device=None):
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer, 
             mlm_probability=0.15)
 
         training_args = TrainingArguments(
-            num_train_epochs=epochs,
+            max_steps=steps,
             per_device_train_batch_size=16,
             output_dir=output_dir)
 

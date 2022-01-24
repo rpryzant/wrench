@@ -1,3 +1,18 @@
+"""
+packages
+    numba
+    pytokenizations
+    sentence_transformers
+    seqeval
+    flyingsquid
+    numbskull
+    pgmpy
+    snorkel-metal
+    tensorboardX
+    optuna
+"""
+
+
 import logging
 import torch
 
@@ -25,13 +40,21 @@ logger = logging.getLogger(__name__)
 
 
 #### Load dataset 
-dataset_home = 'datasets/datasets/'
+dataset_home = '../datasets/'
 data = 'sms'
+
+prop_labeled = 0.7
 
 #### Load real-world dataset
 train_data, valid_data, test_data = load_dataset(dataset_home, data, extract_feature=False)
 
-train_data = train_data.sample(alpha=0.1)
+keep_idxs = random.sample(list(range(len(train_data))), int(len(train_data) * prop_labeled))
+train_data, unlabeled_data = train_data.create_split(idx=keep_idxs)
+
+print("HERE!!")
+print(len(train_data), len(unlabeled_data))
+quit()
+
 
 
 # L_train = rule_induction.auto_rules(

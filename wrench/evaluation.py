@@ -9,7 +9,7 @@ from snorkel.utils import probs_to_preds
 
 
 def metric_to_direction(metric: str) -> str:
-    if metric in ['acc', 'f1_binary', 'f1_micro', 'f1_macro', 'f1_weighted', 'auc']:
+    if metric in ['acc', 'f1_binary', 'f1_micro', 'f1_macro', 'f1_weighted', 'auc', 'precision_macro']:
         return 'maximize'
     if metric in ['logloss', 'brier']:
         return 'minimize'

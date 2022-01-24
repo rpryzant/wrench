@@ -252,13 +252,16 @@ class BaseClassModel(BaseModel, ABC):
         proba = self.predict_proba(dataset, **kwargs)
         return probs_to_preds(probs=proba)
 
-    def test(self, dataset: Union[BaseDataset, np.ndarray], metric_fn: Union[Callable, str], y_true: Optional[np.ndarray] = None, **kwargs):
+    def test(self, dataset: Union[BaseDataset, np.ndarray], metric_fn: Union[Callable, str], y_true: Optional[np.ndarray] = None, write_attns=False, **kwargs):
         if isinstance(metric_fn, str):
             metric_fn = METRIC[metric_fn]
         if y_true is None:
             y_true = np.array(dataset.labels)
-        probas = self.predict_proba(dataset, **kwargs)
-        return metric_fn(y_true, probas)
+        probas = self.predict_proba(dataset, write_attns=write_attns, **kwargs)
+        texts = list(map(lambda x: x["text"], dataset.examples))
+        preds = np.argmax(probas, axis=1)
+        
+        return metric_fn(y_true, probas), list(zip(texts, probas, preds, np.around(y_true, decimals=2).tolist()))
 
 
 class BaseLabelModel(BaseClassModel):
@@ -440,7 +443,7 @@ class BaseTorchClassModel(BaseClassModel, BaseTorchModel, ABC):
         if check_bert_model(self.model):
             max_tokens = config.backbone_config['paras']['max_tokens']
         else:
-            max_tokens = -1
+            max_tokens = 256  # TODO hack to set max tok limit
         return self._init_dataloader(
             dataset_train,
             n_steps,
