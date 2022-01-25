@@ -297,6 +297,18 @@ def remove_pc(X, npc=1, pc=None):
 
     return out
 
+def pre(weak_labs, labs):
+    yhat, y = [], []
+    for wl, l in zip(weak_labs, labs):
+        x = [y for y in wl if y != -1]
+        if len(x) == 0:
+            continue
+        pred = Counter(x).most_common(1)[0][0]
+        yhat.append(pred)
+        y.append(l)
+
+    return metrics.precision_score(y, yhat, average='macro')
+
 
 class AutoRuleGenerator:
 
@@ -540,11 +552,12 @@ class AutoRuleGenerator:
             best_idx = -1
             best_delta = 0
 
-            _, base_precision = utils.acc_pre(valid_wl, valid_labs)
+            # TODO -- possibly f1 score?
+            base_precision = pre(valid_wl, valid_labs)
 
             while i < valid_wl.shape[1]:
                 tmp_wl = np.delete(valid_wl, i, axis=1)
-                _, precision = utils.acc_pre(tmp_wl, valid_labs)
+                precision = pre(tmp_wl, valid_labs)
                 if (precision - base_precision) > best_delta:
                     best_delta = precision - base_precision
                     best_idx = i
@@ -602,79 +615,6 @@ class AutoRuleGenerator:
                 weak_labels[x, y] = -1
         return weak_labels
 
-    def traintest(self, train, test):
-        import sklearn.metrics as metrics
-
-        train_text, train_labs = train
-        test_text, test_labs = test
-
-        X_train = self.featurizer(train_text)
-        X_test = self.featurizer(test_text)
-
-        model = LogisticRegression(
-            penalty='l2', C=0.7, fit_intercept=False, solver='liblinear')
-        model.fit(X_train, train_labs)
-
-
-        for ci in range(len(model.coef_)):
-            rm_idxs = set(range(len(model.coef_[ci]))) - set([i for i, _, _ in self.name_rulefn_score])
-            for i in rm_idxs:
-                model.coef_[ci][i] = 0
-            
-        rule_f1 = metrics.f1_score(test_labs, model.predict(X_test), average='macro')
-
-        print(rule_f1)
-        quit()
-
-
-    def get_weak_labels(self, texts, labels, num_rules, reg_type='l2', reg_strength=0.5):
-        return weak_labels_from_features(
-            self.featurize(texts),
-            labels,
-            num_rules=num_rules,
-            reg_type=reg_type,
-            reg_strength=reg_strength,
-        )
-
-    def featurize(self, texts):
-        return self.featurizer(texts)
-
-    def build_joint_featurizer(self, featA, featB):
-        
-        def featurize(texts):
-            featsA = featA(texts)
-            featsB = featB(texts)
-            feats = np.concatenate( (featsA, featsB), axis=1 )
-            return feats
-
-        return featurize
-
-
-    def build_neuron_featurizer(self, texts, labels, num_features, score_type):
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        model = BertForMaskedLM.from_pretrained('bert-base-uncased', return_dict=True).cuda()
-        hiddens = get_hiddens_for_corpus(texts, tokenizer, model)
-
-        covariates = stats.zscore(hiddens, axis=1)
-        rules = rules_from_covariates(
-            covariates, 
-            labels, 
-            score_type=score_type,
-            num_rules=num_features)  
-        del tokenizer
-        del model
-
-        def featurize(texts):
-            tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-            model = BertForMaskedLM.from_pretrained('bert-base-uncased', return_dict=True).cuda()
-            hiddens = get_hiddens_for_corpus(texts, tokenizer, model)
-            covariates = stats.zscore(hiddens, axis=1)
-            X = rules2onehot(covariates, rules)
-            del tokenizer
-            del model
-            return np.array(X)
-
-        return featurize
 
 
     def build_ngram_featurizer(self, texts, labels, num_features, ngram, max_df, min_df, use_stops):
